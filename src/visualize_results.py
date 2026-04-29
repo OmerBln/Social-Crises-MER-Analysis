@@ -1,0 +1,119 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import glob
+import os
+import sys
+
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
+
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
+PLOTS_DIR = os.path.join(DATA_DIR, "plots")
+os.makedirs(PLOTS_DIR, exist_ok=True)
+
+plt.style.use('seaborn-v0_8-whitegrid')
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['figure.autolayout'] = True
+
+def load_all_analyzed_data():
+    analiz_dir = os.path.join(DATA_DIR, "analiz")
+    file_paths = glob.glob(os.path.join(analiz_dir, "analyzed_*.csv"))
+    
+    if not file_paths:
+        print(f"HATA: 'analyzed_' ile başlayan sonuç dosyası bulunamadı!")
+        print(f"Aranan dizin: {analiz_dir}")
+        print("Lütfen grafikleri çizdirmeden önce 'inference_online.py' dosyasını çalıştırın.")
+        return None
+
+    all_data = []
+    
+    for path in file_paths:
+        file_name = os.path.basename(path)
+        
+        event_name = file_name.replace("analyzed_", "").replace(".csv", "")
+        
+        try:
+            df = pd.read_csv(path)
+            df['Event'] = event_name
+            all_data.append(df)
+        except Exception as e:
+            print(f"Dosya okunurken hata oluştu ({file_name}): {e}")
+            
+    if not all_data:
+        return None
+        
+    full_df = pd.concat(all_data, ignore_index=True)
+    print(f"Toplam {len(full_df)} adet analiz edilmiş şarkı parçası başarıyla yüklendi.")
+    return full_df
+
+def plot_emotion_distribution_by_event(df):
+    plt.figure(figsize=(14, 8))
+    
+    emotion_counts = df.groupby(['Event', 'predicted_emotion']).size().reset_index(name='Count')
+    
+    sns.barplot(data=emotion_counts, x='Event', y='Count', hue='predicted_emotion', palette='Set2')
+    
+    plt.title('Toplumsal Krizlere Göre Şarkılardaki Baskın Duygu Dağılımı', fontsize=16, fontweight='bold')
+    plt.xlabel('Krizler / Olaylar', fontsize=12)
+    plt.ylabel('Şarkı Parçası Sayısı', fontsize=12)
+    plt.xticks(rotation=45, ha='right')
+    plt.legend(title='Duygular', bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    save_path = os.path.join(PLOTS_DIR, "1_Krizlere_Gore_Duygu_Dagilimi.png")
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Grafik kaydedildi: {save_path}")
+
+def plot_average_emotion_scores(df):
+    plt.figure(figsize=(12, 8))
+    
+    score_cols = ['score_sad', 'score_joy', 'score_love', 'score_anger', 'score_fear', 'score_surprise']
+    
+    existing_score_cols = [col for col in score_cols if col in df.columns]
+    
+    if not existing_score_cols:
+        print("Hata: Skor sütunları bulunamadı. inference_online.py çıktısını kontrol edin.")
+        return
+        
+    avg_scores = df.groupby('Event')[existing_score_cols].mean()
+    
+    avg_scores.columns = [col.replace('score_', '').capitalize() for col in avg_scores.columns]
+    
+    sns.heatmap(avg_scores, annot=True, cmap='YlOrRd', fmt=".2f", linewidths=.5)
+    
+    plt.title('Toplumsal Krizlerin Müzikteki Ortalama Duygu Şiddeti (0-1 Arası)', fontsize=16, fontweight='bold')
+    plt.xlabel('Duygular', fontsize=12)
+    plt.ylabel('Krizler / Olaylar', fontsize=12)
+    
+    save_path = os.path.join(PLOTS_DIR, "2_Ortalama_Duygu_Siddeti_Isi_Haritasi.png")
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Grafik kaydedildi: {save_path}")
+
+def plot_overall_emotion_pie(df):
+    plt.figure(figsize=(10, 8))
+    
+    emotion_counts = df['predicted_emotion'].value_counts()
+    
+    plt.pie(emotion_counts, labels=emotion_counts.index, autopct='%1.1f%%', startangle=140, 
+            colors=sns.color_palette("pastel"), wedgeprops={'edgecolor': 'white'})
+    
+    plt.title('Tüm Kriz Dönemlerindeki Genel Duygu Dağılımı', fontsize=16, fontweight='bold')
+    
+    save_path = os.path.join(PLOTS_DIR, "3_Genel_Duygu_Pasta_Grafigi.png")
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Grafik kaydedildi: {save_path}")
+
+def main():
+    df = load_all_analyzed_data()
+    
+    if df is not None:
+        plot_emotion_distribution_by_event(df)
+        plot_average_emotion_scores(df)
+        plot_overall_emotion_pie(df)
+        print("\nTÜM İŞLEMLER TAMAM!")
+
+if __name__ == "__main__":
+    main()
