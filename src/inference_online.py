@@ -9,7 +9,7 @@ from deep_translator import GoogleTranslator
 from model import MiniTransformer
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
-MODEL_PATH = "final_emotion_model.pth"
+MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "final_emotion_model.pth")
 VOCAB_PATH = os.path.join(DATA_DIR, "vocab.json")
 
 MAX_SEQ_LEN = 128
@@ -62,7 +62,13 @@ def load_system():
     return model, vocab
 
 
-_global_translator = GoogleTranslator(source='auto', target='en')
+_global_translator = None
+
+def get_translator():
+    global _global_translator
+    if _global_translator is None:
+        _global_translator = GoogleTranslator(source='auto', target='en')
+    return _global_translator
 
 TRANSLATION_CACHE_FILE = os.path.join(DATA_DIR, "translation_cache.json")
 translation_cache = {}
@@ -91,14 +97,16 @@ def translate_deep(text_list):
             continue
             
         try:
-            res = _global_translator.translate(text)
+            res = get_translator().translate(text)
             final_res = res if res else text
             translation_cache[text] = final_res
             translations.append(final_res)
             new_translations = True
             time.sleep(0.5)
         except Exception:
+            translation_cache[text] = text
             translations.append(text)
+            new_translations = True
             time.sleep(1)
             
     if new_translations:

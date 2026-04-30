@@ -10,7 +10,7 @@ class PositionalEncoding(nn.Module):
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
         
         pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term[:pe[:, 1::2].size(1)])
         
         self.register_buffer('pe', pe.unsqueeze(0))
 
@@ -65,10 +65,7 @@ class MiniTransformer(nn.Module):
         
         x = sum_x / counts 
         
-        if self.training:
-            logits = torch.mean(torch.stack([self.classifier(x) for _ in range(5)]), dim=0)
-        else:
-            logits = self.classifier(x)
+        logits = self.classifier(x)
             
         return logits
 

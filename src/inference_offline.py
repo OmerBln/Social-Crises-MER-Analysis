@@ -7,12 +7,16 @@ from easynmt import EasyNMT
 from model import MiniTransformer
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
-MODEL_PATH = "final_emotion_model.pth"
+MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "final_emotion_model.pth")
 VOCAB_PATH = os.path.join(DATA_DIR, "vocab.json")
 
 MAX_SEQ_LEN = 128 
 BATCH_SIZE = 4
 SAMPLE_LIMIT = 500
+
+WORD_LIMIT = 400
+CHUNK_SIZE = 25
+TOP_K = 3
 
 EMOTION_LABELS = {
     0: 'Hüzün',
@@ -25,9 +29,15 @@ EMOTION_LABELS = {
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-print("--- Çeviri Motoru (EasyNMT) Yükleniyor ---")
-translator = EasyNMT('opus-mt')
-print(f"Çeviri Motoru Hazır! (Cihaz: {device})")
+_translator = None
+
+def get_translator():
+    global _translator
+    if _translator is None:
+        print("--- Çeviri Motoru (EasyNMT) Yükleniyor ---")
+        _translator = EasyNMT('opus-mt')
+        print(f"Çeviri Motoru Hazır! (Cihaz: {device})")
+    return _translator
 
 def preprocess_text(text, vocab, max_len=MAX_SEQ_LEN):
     if not isinstance(text, str): text = ""
@@ -62,8 +72,15 @@ def load_system():
     return model, vocab
 
 def translate_easynmt(text_list, source_lang):
-    translations = translator.translate(text_list, source_lang=source_lang, target_lang='en', batch_size=BATCH_SIZE)
+    translations = get_translator().translate(text_list, source_lang=source_lang, target_lang='en', batch_size=BATCH_SIZE)
     return translations
+
+def top_k_pool(stacked_logits: torch.Tensor, k: int) -> torch.Tensor:
+    num_chunks = stacked_logits.shape[0]
+    if num_chunks <= k:
+        return stacked_logits.mean(dim=0)
+    top_k_values, _ = torch.topk(stacked_logits, k, dim=0)
+    return top_k_values.mean(dim=0)
 
 def run_inference():
     model, vocab = load_system()
@@ -105,7 +122,7 @@ def run_inference():
             truncated_texts = []
             for text in original_texts:
                 clean_text = re.sub(r'\[.*?\]', '', str(text))
-                words = str(text).split()[:75]
+                words = clean_text.split()[:WORD_LIMIT]
                 truncated_texts.append(" ".join(words))
             
             if lang_code != 'en':
@@ -121,7 +138,7 @@ def run_inference():
             
             for j, text in enumerate(translated_texts):
                 words = str(text).split()
-                chunks = [words[k : k+25] for k in range(0, min(75, len(words)), 25)]
+                chunks = [words[k : k+CHUNK_SIZE] for k in range(0, min(WORD_LIMIT, len(words)), CHUNK_SIZE)]
                 
                 if not chunks: 
                     chunks = [[""]]
@@ -137,31 +154,30 @@ def run_inference():
             input_ids_list = [preprocess_text(chunk, vocab) for chunk in all_chunks]
             input_tensor = torch.tensor(input_ids_list, dtype=torch.long).to(device)
             
-            with torch.no_grad():
+            with torch.inference_mode():
                 logits = model(input_tensor)
-                probs = torch.softmax(logits, dim=1)
             
-            song_probs = {j: [] for j in range(len(translated_texts))}
+            song_logits = {j: [] for j in range(len(translated_texts))}
             
             for idx, song_idx in enumerate(chunk_to_song_map):
-                song_probs[song_idx].append(probs[idx])
+                song_logits[song_idx].append(logits[idx])
                 
             for j, text in enumerate(original_texts):
-                stacked_probs = torch.stack(song_probs[j]) 
-                avg_probs = stacked_probs.mean(dim=0) 
-                
-                pred_idx = torch.argmax(avg_probs).item()
+                stacked_logits = torch.stack(song_logits[j])
+                avg_logits = top_k_pool(stacked_logits, TOP_K)
+                final_probs = torch.softmax(avg_logits, dim=0)
+                pred_idx = torch.argmax(final_probs).item()
                 
                 results.append({
                     'original_snippet': str(text)[:50],
                     'translated_snippet': str(translated_texts[j])[:50] if lang_code != 'en' else "-",
                     'predicted_emotion': EMOTION_LABELS[pred_idx],
-                    'score_sad': avg_probs[0].item(),
-                    'score_joy': avg_probs[1].item(),
-                    'score_love': avg_probs[2].item(),
-                    'score_anger': avg_probs[3].item(),
-                    'score_fear': avg_probs[4].item(),
-                    'score_surprise': avg_probs[5].item()
+                    'score_sad': final_probs[0].item(),
+                    'score_joy': final_probs[1].item(),
+                    'score_love': final_probs[2].item(),
+                    'score_anger': final_probs[3].item(),
+                    'score_fear': final_probs[4].item(),
+                    'score_surprise': final_probs[5].item()
                 })
             
             print(f"   {min(i+BATCH_SIZE, len(df))}/{len(df)} işlendi...", end="\r")

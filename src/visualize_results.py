@@ -5,6 +5,8 @@ import glob
 import os
 import sys
 
+import re
+
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
@@ -15,6 +17,13 @@ os.makedirs(PLOTS_DIR, exist_ok=True)
 plt.style.use('seaborn-v0_8-whitegrid')
 plt.rcParams['font.family'] = 'sans-serif'
 plt.rcParams['figure.autolayout'] = True
+
+def format_event_label(name):
+    parts = name.split('_', 2)
+    if len(parts) >= 3:
+        label = re.sub(r'([a-z])([A-Z])', r'\1 \2', parts[2])
+        return f"{parts[0]} {parts[1]}\n{label}"
+    return name
 
 def load_all_analyzed_data():
     analiz_dir = os.path.join(DATA_DIR, "analiz")
@@ -48,7 +57,7 @@ def load_all_analyzed_data():
     return full_df
 
 def plot_emotion_distribution_by_event(df):
-    plt.figure(figsize=(14, 8))
+    plt.figure(figsize=(18, 9))
     
     emotion_counts = df.groupby(['Event', 'predicted_emotion']).size().reset_index(name='Count')
     
@@ -57,7 +66,11 @@ def plot_emotion_distribution_by_event(df):
     plt.title('Toplumsal Krizlere Göre Şarkılardaki Baskın Duygu Dağılımı', fontsize=16, fontweight='bold')
     plt.xlabel('Krizler / Olaylar', fontsize=12)
     plt.ylabel('Şarkı Parçası Sayısı', fontsize=12)
-    plt.xticks(rotation=45, ha='right')
+    
+    ax = plt.gca()
+    ax.set_xticklabels([format_event_label(t.get_text()) for t in ax.get_xticklabels()], 
+                       rotation=45, ha='right', fontsize=8)
+    
     plt.legend(title='Duygular', bbox_to_anchor=(1.05, 1), loc='upper left')
     
     save_path = os.path.join(PLOTS_DIR, "1_Krizlere_Gore_Duygu_Dagilimi.png")
@@ -106,6 +119,35 @@ def plot_overall_emotion_pie(df):
     plt.close()
     print(f"Grafik kaydedildi: {save_path}")
 
+def plot_emotion_by_language(df):
+    lang_map = {'TR': 'Türkçe', 'EN': 'English', 'JA': 'Japanese', 'FR': 'Français', 'ES': 'Español'}
+    
+    df_copy = df.copy()
+    df_copy['Language'] = df_copy['Event'].str.split('_').str[0].map(lang_map).fillna('Diğer')
+    
+    if df_copy['Language'].nunique() < 2:
+        print("Dil bazında karşılaştırma için en az 2 dil gerekli, atlanıyor.")
+        return
+    
+    plt.figure(figsize=(12, 7))
+    
+    lang_emotion = df_copy.groupby(['Language', 'predicted_emotion']).size().reset_index(name='Count')
+    lang_totals = df_copy.groupby('Language').size().reset_index(name='Total')
+    lang_emotion = lang_emotion.merge(lang_totals, on='Language')
+    lang_emotion['Percentage'] = (lang_emotion['Count'] / lang_emotion['Total']) * 100
+    
+    sns.barplot(data=lang_emotion, x='Language', y='Percentage', hue='predicted_emotion', palette='Set2')
+    
+    plt.title('Dil Bazlı Duygu Dağılımı Karşılaştırması (%)', fontsize=16, fontweight='bold')
+    plt.xlabel('Dil', fontsize=12)
+    plt.ylabel('Yüzde (%)', fontsize=12)
+    plt.legend(title='Duygular', bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    save_path = os.path.join(PLOTS_DIR, "4_Dil_Bazli_Duygu_Karsilastirmasi.png")
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Grafik kaydedildi: {save_path}")
+
 def main():
     df = load_all_analyzed_data()
     
@@ -113,6 +155,7 @@ def main():
         plot_emotion_distribution_by_event(df)
         plot_average_emotion_scores(df)
         plot_overall_emotion_pie(df)
+        plot_emotion_by_language(df)
         print("\nTÜM İŞLEMLER TAMAM!")
 
 if __name__ == "__main__":

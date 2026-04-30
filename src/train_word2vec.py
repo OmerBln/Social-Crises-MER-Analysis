@@ -53,9 +53,9 @@ def train_fast_embeddings():
         sentences=sentences, 
         vector_size=256,   
         window=5, 
-        min_count=15,      
+        min_count=5,       
         workers=cores,
-        epochs=2           
+        epochs=5           
     )
     
     w2v_model.save(OUTPUT_MODEL)

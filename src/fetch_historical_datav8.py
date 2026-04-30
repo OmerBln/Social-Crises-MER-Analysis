@@ -430,7 +430,7 @@ def try_add(
     event_name: str, song_data: list, artist_counts: dict,
     existing_keys: set, limit: int, csv_path: str,
     agent: GatekeeperAgent, source: str,
-    expected_country: str, lang: str
+    expected_country: str, lang: str, seed_set: set = None
 ) -> bool:
     if len(song_data) >= limit:
         return False
@@ -446,8 +446,9 @@ def try_add(
         return False
 
     norm_name = artist.lower().strip()
-    seeds = [s.lower().strip() for s in SEED_ARTISTS.get(lang, [])]
-    if norm_name not in seeds:
+    if seed_set is None:
+        seed_set = {s.lower().strip() for s in SEED_ARTISTS.get(lang, [])}
+    if norm_name not in seed_set:
         country = get_artist_country(artist)
         if not country or country.upper() != expected_country.upper():
             existing_keys.add(key) 
@@ -498,6 +499,7 @@ def fetch_event(event: dict) -> None:
             pass
 
     agent = GatekeeperAgent(lang)
+    seed_set = {s.lower().strip() for s in SEED_ARTISTS.get(lang, [])}
 
     # 1: LOKAL DATASET
     if lang_file and os.path.exists(lang_file):
@@ -510,7 +512,7 @@ def fetch_event(event: dict) -> None:
                 break
             try_add(row["artist"], row["title"], row["lyrics"], row["year"],
                     event_name, song_data, artist_counts, existing_keys,
-                    limit, csv_path, agent, "T1:local", mb_country, lang)
+                    limit, csv_path, agent, "T1:local", mb_country, lang, seed_set)
 
     # 2: MB (rlang) + LOKAL INDEX
     if len(song_data) < limit and lang_file and os.path.exists(lang_file):
@@ -524,7 +526,7 @@ def fetch_event(event: dict) -> None:
             if lyrics:
                 try_add(cand["artist"], cand["title"], lyrics, cand["year"],
                         event_name, song_data, artist_counts, existing_keys,
-                        limit, csv_path, agent, "T2:MB+local", mb_country, lang)
+                        limit, csv_path, agent, "T2:MB+local", mb_country, lang, seed_set)
 
     # 3: SEED_ARTISTS × MB + LRCLIB
     if len(song_data) < limit:
@@ -553,7 +555,7 @@ def fetch_event(event: dict) -> None:
             if lyrics:
                 ok = try_add(cand["artist"], cand["title"], lyrics, cand["year"],
                              event_name, song_data, artist_counts, existing_keys,
-                             limit, csv_path, agent, "T3:LRCLIB", mb_country, lang)
+                             limit, csv_path, agent, "T3:LRCLIB", mb_country, lang, seed_set)
                 if not ok:
                     existing_keys.add(key)
 

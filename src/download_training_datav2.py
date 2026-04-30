@@ -30,14 +30,7 @@ def download_and_process():
     full_df = pd.concat([df_train, df_val, df_test], ignore_index=True)
     print(f"Toplam Ham Veri Sayısı: {len(full_df)}")
     
-    processed_data = []
-    for _, row in full_df.iterrows():
-        processed_data.append({
-            'text': row['text'],
-            'label': row['label']
-        })
-        
-    new_df = pd.DataFrame(processed_data)
+    new_df = full_df[['text', 'label']].copy()
     
     print("\n6 Sınıflı Yeni Dağılım:")
     for label, count in new_df['label'].value_counts().sort_index().items():

@@ -18,8 +18,8 @@ D_MODEL = 256
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def load_data():  
-    train_x, train_y = torch.load(os.path.join(DATA_DIR, "real_train.pt"))
-    val_x, val_y = torch.load(os.path.join(DATA_DIR, "real_val.pt"))
+    train_x, train_y = torch.load(os.path.join(DATA_DIR, "real_train.pt"), weights_only=True)
+    val_x, val_y = torch.load(os.path.join(DATA_DIR, "real_val.pt"), weights_only=True)
     return train_x, train_y, val_x, val_y
 
 def load_pretrained_vectors(vocab, vector_path, d_model):
@@ -58,8 +58,17 @@ def train():
 
     model = MiniTransformer(vocab_size=vocab_size, d_model=D_MODEL, num_classes=6, pretrained_embeddings=pretrained_weights).to(device)
     
-    optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-2)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2, verbose=True)
+    embedding_params = list(model.embedding.parameters())
+    embedding_ids = {id(p) for p in embedding_params}
+    other_params = [p for p in model.parameters() if id(p) not in embedding_ids]
+    
+    optimizer = optim.AdamW([
+        {'params': other_params, 'lr': LEARNING_RATE},
+        {'params': embedding_params, 'lr': LEARNING_RATE}
+    ], weight_decay=1e-2)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2)
+    use_amp = torch.cuda.is_available()
+    scaler = torch.amp.GradScaler(enabled=use_amp)
     
     train_x, train_y, val_x, val_y = load_data() 
     
@@ -77,6 +86,8 @@ def train():
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
         
     best_val_loss = float('inf') 
+    patience_counter = 0
+    PATIENCE = 5
 
     for epoch in range(EPOCHS):
         
@@ -86,9 +97,7 @@ def train():
         elif epoch == 3:
             print("Embedding katmanı çözüldü, fine-tuning başlıyor.")
             model.embedding.weight.requires_grad = True
-            
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = param_group['lr'] * 0.5 
+            optimizer.param_groups[1]['lr'] = optimizer.param_groups[0]['lr'] * 0.5
 
         model.train()
         total_loss = 0
@@ -98,10 +107,14 @@ def train():
             data, target = data.to(device), target.to(device)
             
             optimizer.zero_grad()
-            output = model(data)
-            loss = criterion(output, target)
-            loss.backward()
-            optimizer.step()
+            with torch.amp.autocast(device_type=device.type, enabled=use_amp):
+                output = model(data)
+                loss = criterion(output, target)
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            scaler.step(optimizer)
+            scaler.update()
             
             total_loss += loss.item()
             
@@ -134,10 +147,15 @@ def train():
         
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
+            patience_counter = 0
             torch.save(model.state_dict(), MODEL_SAVE_PATH)
             print(f"En iyi model kaydedildi. (Val Loss: {best_val_loss:.4f})\n")
         else:
-            print(f"Model iyileşmedi. (En İyi Val Loss: {best_val_loss:.4f})\n")
+            patience_counter += 1
+            print(f"Model iyileşmedi. ({patience_counter}/{PATIENCE}) (En İyi Val Loss: {best_val_loss:.4f})\n")
+            if patience_counter >= PATIENCE:
+                print("Early stopping tetiklendi!")
+                break
 
 if __name__ == "__main__":
     train()

@@ -10,14 +10,6 @@ VOCAB_PATH = os.path.join(DATA_DIR, "vocab.json")
 CSV_PATH = os.path.join(DATA_DIR, "labeled_emotion_data.csv")
 MAX_SEQ_LEN = 128
 
-with open(VOCAB_PATH, "r", encoding="utf-8") as f:
-    vocab = json.load(f)
-    
-PAD_IDX = vocab["<PAD>"]
-UNK_IDX = vocab["<UNK>"]
-SOS_IDX = vocab["<SOS>"]
-EOS_IDX = vocab["<EOS>"]
-
 def clean_text(text):
     if not isinstance(text, str): return ""
     text = text.lower()
@@ -25,24 +17,33 @@ def clean_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-def text_to_ids(text):
-    cleaned_text = clean_text(text)
-    
-    if not cleaned_text:
-        return [PAD_IDX] * MAX_SEQ_LEN
-        
-    words = cleaned_text.split()
-    
-    token_ids = [vocab.get(w, UNK_IDX) for w in words[:MAX_SEQ_LEN - 2]]
-    token_ids = [SOS_IDX] + token_ids + [EOS_IDX]
-    
-    if len(token_ids) < MAX_SEQ_LEN:
-        token_ids += [PAD_IDX] * (MAX_SEQ_LEN - len(token_ids))
-        
-    return token_ids
-
 def process():
     print("Eğitim verisi işleniyor...")
+    
+    with open(VOCAB_PATH, "r", encoding="utf-8") as f:
+        vocab = json.load(f)
+    
+    PAD_IDX = vocab["<PAD>"]
+    UNK_IDX = vocab["<UNK>"]
+    SOS_IDX = vocab["<SOS>"]
+    EOS_IDX = vocab["<EOS>"]
+    
+    def text_to_ids(text):
+        cleaned_text = clean_text(text)
+        
+        if not cleaned_text:
+            return [PAD_IDX] * MAX_SEQ_LEN
+            
+        words = cleaned_text.split()
+        
+        token_ids = [vocab.get(w, UNK_IDX) for w in words[:MAX_SEQ_LEN - 2]]
+        token_ids = [SOS_IDX] + token_ids + [EOS_IDX]
+        
+        if len(token_ids) < MAX_SEQ_LEN:
+            token_ids += [PAD_IDX] * (MAX_SEQ_LEN - len(token_ids))
+            
+        return token_ids
+    
     df = pd.read_csv(CSV_PATH)
     
     df = df.dropna(subset=['text', 'label'])
