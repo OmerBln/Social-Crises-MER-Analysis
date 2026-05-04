@@ -130,6 +130,9 @@ MB_MAX_PER_YEAR      = 400
 MB_PER_ARTIST        = 100   
 MAX_LRCLIB_CALLS     = 1000  
 
+BASELINE_LOOKBACK_YEARS = 5
+BASELINE_LIMIT          = 200
+
 BLACKLIST_KEYWORDS = [
     "instrumental", "karaoke", "cover", "remix",
     "version", "live", "edit", "remaster",
@@ -566,14 +569,54 @@ def fetch_event(event: dict) -> None:
         pd.DataFrame(song_data).to_csv(csv_path, index=False, encoding="utf-8-sig")
         print(f"  [KAYDEDILDI] {event_name} -> {len(song_data)} sarki")
     else:
-        print(f"  [DIKKAT] {event_name} icin hic sarki toplanamadi!")
+        print(f"  {event_name} icin hic sarki toplanamadi!")
+
+
+def generate_baseline_events(events: list[dict], lookback: int = BASELINE_LOOKBACK_YEARS) -> list[dict]:
+    baseline_events = []
+    for ev in events:
+        year_range = ev["year"].split("-")
+        try:
+            start_year = int(year_range[0])
+        except ValueError:
+            continue
+
+        baseline_end   = start_year - 1
+        baseline_start = start_year - lookback
+
+        if baseline_start < 1950:
+            baseline_start = 1950
+
+        baseline_year_str = f"{baseline_start}-{baseline_end}"
+
+        baseline_event = {
+            "event_name":  ev["event_name"] + "_BASELINE",
+            "year":        baseline_year_str,
+            "lang":        ev["lang"],
+            "mb_country":  ev["mb_country"],
+            "limit":       BASELINE_LIMIT,
+        }
+        baseline_events.append(baseline_event)
+    return baseline_events
 
 
 def fetch_data() -> None:
     load_artist_country_cache()
+
+    print("\n" + "=" * 62)
+    print("  Veri Toplanıyor")
+    print("=" * 62)
     for event in TARGET_EVENTS:
         fetch_event(event)
-    print("\n\nTüm olaylar tamamlandi!")
+
+    print("\n\n" + "=" * 62)
+    print("  Baseline")
+    print("=" * 62)
+    baseline_events = generate_baseline_events(TARGET_EVENTS)
+    for bl_event in baseline_events:
+        fetch_event(bl_event)
+
+    print("\n\nTum olaylar ve baseline verileri tamamlandi!")
 
 
 if __name__ == "__main__":

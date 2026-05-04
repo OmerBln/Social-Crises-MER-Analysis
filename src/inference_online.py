@@ -191,7 +191,13 @@ def run_inference():
                 final_probs = torch.softmax(avg_logits, dim=0)
                 pred_idx = torch.argmax(final_probs).item()
 
+                row_idx = i + j
+                row_data = df.iloc[row_idx] if row_idx < len(df) else {}
+
                 results.append({
+                    'year': str(row_data.get('year', '')),
+                    'artist': str(row_data.get('artist', '')),
+                    'title': str(row_data.get('title', '')),
                     'original_snippet': str(text)[:50],
                     'translated_snippet': str(translated_texts[j])[:50],
                     'predicted_emotion': EMOTION_LABELS[pred_idx],
