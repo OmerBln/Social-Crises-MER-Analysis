@@ -3,6 +3,7 @@ import pandas as pd
 import json
 import os
 import re
+import glob
 from easynmt import EasyNMT
 from model import MiniTransformer
 
@@ -84,51 +85,38 @@ def top_k_pool(stacked_logits: torch.Tensor, k: int) -> torch.Tensor:
 
 def run_inference():
     model, vocab = load_system()
+    raw_files = glob.glob(os.path.join(DATA_DIR, "raw", "*_raw.csv"))
+
+    analiz_dir = os.path.join(DATA_DIR, "analiz")
+    os.makedirs(analiz_dir, exist_ok=True)
+
+    for file_path in raw_files:
+        file_name = os.path.basename(file_path)
+        out_name = "analyzed_" + file_name.replace("_raw.csv", ".csv")
+        out_path = os.path.join(analiz_dir, out_name)
+
+        df = pd.read_csv(file_path).head(SAMPLE_LIMIT)
+        TEXT_COLUMN = 'lyrics' if 'lyrics' in df.columns else 'text'
+
+        is_english = file_name.upper().startswith("EN_")
+
+        # Dil kodunu dosya adından çıkar
+        lang_code = file_name.split("_")[0].lower() if "_" in file_name else "en"
     
-    files_to_process = [
-        ("data_tr.csv", "tr"),
-        ("data_en.csv", "en"),
-        ("data_ja.csv", "ja"),
-        ("data_fr.csv", "fr"),
-        ("data_es.csv", "es")
-    ]
-    
-    for file_name, lang_code in files_to_process:
-        file_path = os.path.join(DATA_DIR, file_name)
-        if not os.path.exists(file_path):
-            print(f"Uyarı: {file_name} bulunamadı, atlanıyor.")
-            continue
-            
-        print(f"\n-> Dosya İşleniyor: {file_name} (Dil: {lang_code})")
-        df = pd.read_csv(file_path)
-        
-        if 'lyrics' in df.columns:
-            TEXT_COLUMN = 'lyrics'
-        elif 'text' in df.columns:
-            TEXT_COLUMN = 'text'
-        else:
-            print(f"   Hata: {file_name} içinde geçerli bir metin sütunu bulunamadı!")
-            continue
-            
-        df = df.head(SAMPLE_LIMIT)
-        print(f"   Hedef: {len(df)} şarkı analiz edilecek.")
-        
         results = []
-        
         for i in range(0, len(df), BATCH_SIZE):
             batch_df = df.iloc[i : i+BATCH_SIZE]
             original_texts = batch_df[TEXT_COLUMN].tolist()
             
-            truncated_texts = []
-            for text in original_texts:
-                clean_text = re.sub(r'\[.*?\]', '', str(text))
-                words = clean_text.split()[:WORD_LIMIT]
-                truncated_texts.append(" ".join(words))
+            truncated_texts = [
+                " ".join(str(re.sub(r'\[.*?\]', '', str(t))).split()[:WORD_LIMIT])
+                for t in original_texts
+            ]
             
-            if lang_code != 'en':
-                translated_texts = translate_easynmt(truncated_texts, source_lang=lang_code)
-            else:
+            if is_english:
                 translated_texts = truncated_texts
+            else:
+                translated_texts = translate_easynmt(truncated_texts, source_lang=lang_code)
                 
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -144,11 +132,7 @@ def run_inference():
                     chunks = [[""]]
                     
                 for chunk in chunks:
-                    if isinstance(chunk, list):
-                        chunk_str = " ".join(chunk)
-                    else:
-                        chunk_str = chunk
-                    all_chunks.append(chunk_str)
+                    all_chunks.append(" ".join(chunk) if isinstance(chunk, list) else chunk)
                     chunk_to_song_map.append(j)
             
             input_ids_list = [preprocess_text(chunk, vocab) for chunk in all_chunks]
@@ -168,9 +152,14 @@ def run_inference():
                 final_probs = torch.softmax(avg_logits, dim=0)
                 pred_idx = torch.argmax(final_probs).item()
                 
+                row_data = batch_df.iloc[j]
+
                 results.append({
+                    'year': str(row_data.get('year', '')),
+                    'artist': str(row_data.get('artist', '')),
+                    'title': str(row_data.get('title', '')),
                     'original_snippet': str(text)[:50],
-                    'translated_snippet': str(translated_texts[j])[:50] if lang_code != 'en' else "-",
+                    'translated_snippet': str(translated_texts[j])[:50],
                     'predicted_emotion': EMOTION_LABELS[pred_idx],
                     'score_sad': final_probs[0].item(),
                     'score_joy': final_probs[1].item(),
@@ -182,10 +171,8 @@ def run_inference():
             
             print(f"   {min(i+BATCH_SIZE, len(df))}/{len(df)} işlendi...", end="\r")
             
-        out_df = pd.DataFrame(results)
-        out_path = os.path.join(DATA_DIR, f"analyzed_{lang_code}.csv")
-        out_df.to_csv(out_path, index=False, encoding="utf-8-sig")
-        print(f"\n   TAMAMLANDI: analyzed_{lang_code}.csv\n")
+        pd.DataFrame(results).to_csv(out_path, index=False, encoding="utf-8-sig")
+        print(f"\n   TAMAMLANDI: {out_name}\n")
 
 if __name__ == "__main__":
     run_inference()

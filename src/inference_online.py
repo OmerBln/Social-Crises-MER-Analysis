@@ -191,8 +191,7 @@ def run_inference():
                 final_probs = torch.softmax(avg_logits, dim=0)
                 pred_idx = torch.argmax(final_probs).item()
 
-                row_idx = i + j
-                row_data = df.iloc[row_idx] if row_idx < len(df) else {}
+                row_data = batch_df.iloc[j]
 
                 results.append({
                     'year': str(row_data.get('year', '')),
