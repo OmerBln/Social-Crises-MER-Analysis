@@ -27,7 +27,8 @@ def format_event_label(name):
 
 def load_all_analyzed_data():
     analiz_dir = os.path.join(DATA_DIR, "analiz")
-    file_paths = glob.glob(os.path.join(analiz_dir, "analyzed_*.csv"))
+    file_paths = [p for p in glob.glob(os.path.join(analiz_dir, "analyzed_*.csv"))
+                  if "_BASELINE" not in os.path.basename(p)]
     
     if not file_paths:
         print(f"HATA: 'analyzed_' ile başlayan sonuç dosyası bulunamadı!")
