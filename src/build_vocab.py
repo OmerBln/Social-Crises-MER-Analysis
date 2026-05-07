@@ -54,15 +54,9 @@ def build_english_vocab():
 
     print(f"\n--- Kelime Sayımı Tamamlandı ---")
     
-    most_common_words = master_word_counter.most_common(TOTAL_VOCAB_TARGET)
-    
-    master_word_set = set()
-    added_count = 0
-    
-    for word, count in most_common_words:
-        if count >= MIN_FREQ:
-            master_word_set.add(word)
-            added_count += 1
+    filtered = [(w, c) for w, c in master_word_counter.most_common() if c >= MIN_FREQ]
+    master_word_set = {w for w, _ in filtered[:TOTAL_VOCAB_TARGET]}
+    added_count = len(master_word_set)
             
     print(f"Minimum {MIN_FREQ} kez geçen en popüler {added_count} İngilizce kelime seçildi.")
 

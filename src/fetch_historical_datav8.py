@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pandas as pd
 import os, re, random, sys, time, unicodedata
 from langdetect import detect
