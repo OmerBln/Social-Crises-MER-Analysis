@@ -249,7 +249,11 @@ def run_welch_ttest(event_df, baseline_df):
         bl_mean = bl_vals.mean()
         delta   = ev_mean - bl_mean
 
-        pooled_std = np.sqrt(ev_vals.std()**2 / 2 + bl_vals.std()**2 / 2)
+        n_ev, n_bl = len(ev_vals), len(bl_vals)
+        pooled_std = np.sqrt(
+            ((n_ev - 1) * ev_vals.std()**2 + (n_bl - 1) * bl_vals.std()**2)
+            / (n_ev + n_bl - 2)
+        )
         cohens_d = delta / pooled_std if pooled_std > 1e-9 else 0.0
 
         results[col] = {
@@ -331,8 +335,6 @@ def plot_significance_summary(all_results):
     )
 
     cmap = matplotlib.colors.ListedColormap(['#2ECC71', '#F0F0F0', '#E74C3C'])
-    bounds = [-1.5, -0.5, 0.5, 1.5]
-    norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)
 
     fig, ax = plt.subplots(figsize=(14, max(8, len(event_names) * 0.5)))
     sns.heatmap(df_sig, annot=False, cmap=cmap, linewidths=1, ax=ax,

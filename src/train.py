@@ -8,7 +8,7 @@ import numpy as np
 from model import MiniTransformer
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
-MODEL_SAVE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "final_emotion_model.pth")
+MODEL_SAVE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "final_emotion_model.pth")
 VECTOR_PATH = os.path.join(DATA_DIR, "lyrics_vectors.txt")
 BATCH_SIZE = 32
 EPOCHS = 15 
@@ -98,6 +98,9 @@ def train():
             print("Embedding katmanı çözüldü, fine-tuning başlıyor.")
             model.embedding.weight.requires_grad = True
             optimizer.param_groups[1]['lr'] = optimizer.param_groups[0]['lr'] * 0.5
+            for p in embedding_params:
+                if p in optimizer.state:
+                    del optimizer.state[p]
 
         model.train()
         total_loss = 0
