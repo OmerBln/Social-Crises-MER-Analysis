@@ -6,5 +6,7 @@ pychache/
 .idea/
 .vscode/
 *.log
+.cache
+*.pth
 data/
 diğer/
