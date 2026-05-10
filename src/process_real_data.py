@@ -1,7 +1,7 @@
 import pandas as pd
 import torch
 import json
-import re
+from utils import clean_text
 import os
 from sklearn.model_selection import train_test_split
 
@@ -10,12 +10,7 @@ VOCAB_PATH = os.path.join(DATA_DIR, "vocab.json")
 CSV_PATH = os.path.join(DATA_DIR, "labeled_emotion_data.csv")
 MAX_SEQ_LEN = 128
 
-def clean_text(text):
-    if not isinstance(text, str): return ""
-    text = text.lower()
-    text = re.sub(r"[^\w\s']", " ", text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
+
 
 def process():
     print("Eğitim verisi işleniyor...")

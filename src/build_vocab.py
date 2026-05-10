@@ -1,5 +1,5 @@
 import pandas as pd
-import re
+from utils import clean_text
 import json
 import os
 from collections import Counter
@@ -14,14 +14,7 @@ FILES = [
 TOTAL_VOCAB_TARGET = 30000
 MIN_FREQ = 5 
 
-def clean_text(text):
-    if not isinstance(text, str): return ""
-    text = text.lower()
-    
-    text = re.sub(r"[^\w\s']", " ", text) 
-    
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
+
 
 def build_english_vocab():
     master_word_counter = Counter()

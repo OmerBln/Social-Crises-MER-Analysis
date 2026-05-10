@@ -1,15 +1,9 @@
 import os
 import pandas as pd
+from utils import EMOTION_LABELS as LABEL_MAP
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
-LABEL_MAP = {
-    0: 'Hüzün', 
-    1: 'Mutlu', 
-    2: 'Sevgi', 
-    3: 'Öfke', 
-    4: 'Korku', 
-    5: 'Şaşkınlık'
-}
+
 
 def download_and_process():
     os.makedirs(DATA_DIR, exist_ok=True)

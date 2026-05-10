@@ -1,5 +1,5 @@
 import pandas as pd
-import re
+from utils import clean_text
 import os
 from gensim.models import Word2Vec
 import multiprocessing
@@ -12,12 +12,7 @@ OUTPUT_VECTORS = os.path.join(DATA_DIR, "lyrics_vectors.txt")
 
 MAX_CHUNKS = 50 
 
-def clean_text(text):
-    if not isinstance(text, str): return ""
-    text = text.lower()
-    text = re.sub(r"[^\w\s']", " ", text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
+
 
 class CombinedTextIterator:
     def __init__(self, lyrics_path, emotions_path):

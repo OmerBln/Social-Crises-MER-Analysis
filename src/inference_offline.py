@@ -6,12 +6,13 @@ import re
 import glob
 from easynmt import EasyNMT
 from model import MiniTransformer
+from utils import preprocess_text, top_k_pool, EMOTION_LABELS, MAX_SEQ_LEN
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
 MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "final_emotion_model.pth")
 VOCAB_PATH = os.path.join(DATA_DIR, "vocab.json")
 
-MAX_SEQ_LEN = 128 
+
 BATCH_SIZE = 4
 SAMPLE_LIMIT = 500
 
@@ -19,14 +20,7 @@ WORD_LIMIT = 400
 CHUNK_SIZE = 25
 TOP_K = 3
 
-EMOTION_LABELS = {
-    0: 'Hüzün',
-    1: 'Mutlu',
-    2: 'Sevgi',
-    3: 'Öfke',
-    4: 'Korku',
-    5: 'Şaşkınlık'
-}
+
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -40,25 +34,7 @@ def get_translator():
         print(f"Çeviri Motoru Hazır! (Cihaz: {device})")
     return _translator
 
-def preprocess_text(text, vocab, max_len=MAX_SEQ_LEN):
-    if not isinstance(text, str): text = ""
-    text = text.lower()
-    
-    text = re.sub(r"[^\w\s']", " ", text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    
-    words = text.split() 
-    
-    unk_idx, pad_idx = vocab["<UNK>"], vocab["<PAD>"]
-    sos_idx, eos_idx = vocab["<SOS>"], vocab["<EOS>"]
-    
-    ids = [vocab.get(w, unk_idx) for w in words[:max_len - 2]]
-    ids = [sos_idx] + ids + [eos_idx]
-    
-    if len(ids) < max_len:
-        ids += [pad_idx] * (max_len - len(ids))
-        
-    return ids
+
 
 def load_system():
     print("--- Sistem (Torch Model) Yükleniyor ---")
@@ -76,12 +52,7 @@ def translate_easynmt(text_list, source_lang):
     translations = get_translator().translate(text_list, source_lang=source_lang, target_lang='en', batch_size=BATCH_SIZE)
     return translations
 
-def top_k_pool(stacked_logits: torch.Tensor, k: int) -> torch.Tensor:
-    num_chunks = stacked_logits.shape[0]
-    if num_chunks <= k:
-        return stacked_logits.mean(dim=0)
-    top_k_values, _ = torch.topk(stacked_logits, k, dim=0)
-    return top_k_values.mean(dim=0)
+
 
 def run_inference():
     model, vocab = load_system()
