@@ -1,4 +1,6 @@
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 import glob
@@ -69,8 +71,11 @@ def plot_emotion_distribution_by_event(df):
     plt.ylabel('Şarkı Parçası Sayısı', fontsize=12)
     
     ax = plt.gca()
-    ax.set_xticklabels([format_event_label(t.get_text()) for t in ax.get_xticklabels()], 
-                       rotation=45, ha='right', fontsize=8)
+    fig = plt.gcf()
+    fig.canvas.draw()
+    labels = [format_event_label(t.get_text()) for t in ax.get_xticklabels()]
+    ax.set_xticks(ax.get_xticks())
+    ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=8)
     
     plt.legend(title='Duygular', bbox_to_anchor=(1.05, 1), loc='upper left')
     
